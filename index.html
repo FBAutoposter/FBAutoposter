@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Facebook Group Autoposter</title>
+  <script src="https://connect.facebook.net/en_US/sdk.js"></script>
+  <style>
+    /* CSS styles for the group list and post form */
+    /* ... (your existing styles) ... */
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="group-list">
+      <h2>My Facebook Groups</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Select</th>
+            <th>Picture</th>
+            <th>Name</th>
+          </tr>
+        </thead>
+        <tbody id="group-list"></tbody>
+      </table>
+      <div class="pagination">
+        <button id="previous-btn" onclick="previousPage()">Previous</button>
+        <button id="next-btn" onclick="nextPage()">Next</button>
+      </div>
+    </div>
+    <div class="post-form">
+      <h2>Create Post</h2>
+      <form id="post-form" onsubmit="postToGroups(event)">
+        <textarea id="post-message" placeholder="Enter your message"></textarea>
+        <div class="post-options">
+          <input type="file" id="post-photo" accept="image/*">
+          <input type="text" id="post-link" placeholder="Enter a link URL">
+        </div>
+        <button type="submit">Post</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Global variables
+    var groups = [];
+    var currentPage = 0;
+    var pageSize = 10;
+
+    // Initialize the Facebook SDK
+    window.fbAsyncInit = function() {
+      FB.init({
+        appId: '3479568965656101',
+        cookie: true,
+        xfbml: true,
+        version: 'v15.0'
+      });
+
+      FB.getLoginStatus(function(response) {
+        if (response.status === 'connected') {
+          retrieveGroups();
+        } else {
+          FB.login(function(response) {
+            if (response.authResponse) {
+              retrieveGroups();
+            } else {
+              console.log('User cancelled login or did not fully authorize.');
+            }
+          }, { scope: 'user_managed_groups' });
+        }
+      });
+    };
+
+    function retrieveGroups() {
+      FB.api('/me/groups', 'GET', { fields: 'id,name,picture' }, function(response) {
+        if (response && !response.error) {
+          groups = response.data;
+          displayGroups(currentPage);
+        } else {
+          console.log('Error retrieving groups: ' + response.error);
+        }
+      });
+    }
+
+    function displayGroups(pageIndex) {
+      var groupList = document.getElementById('group-list');
+      groupList.innerHTML = '';
+
+      var startIndex = pageIndex * pageSize;
+      var endIndex = startIndex + pageSize;
+      var pageGroups = groups.slice(startIndex, endIndex);
+
+      for (var i = 0; i < pageGroups.length; i++) {
+        var group = pageGroups[i];
+
+        var row = document.createElement('tr');
+        var checkboxCell = document.createElement('td');
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = group.id;
+        checkboxCell.appendChild(checkbox);
+        row.appendChild(checkboxCell);
+
+        var imageCell = document.createElement('td');
+        var imageElement = document.createElement('img');
+        imageElement.src = group.picture.data.url;
+        imageCell.appendChild(imageElement);
+        row.appendChild(imageCell);
+
+        var nameCell = document.createElement('td');
+        nameCell.innerText = group.name;
+        row.appendChild(nameCell);
+
+        groupList.appendChild(row);
+      }
+
+      var previousBtn = document.getElementById('previous-btn');
+      previousBtn.disabled = (currentPage === 0);
+
+      var nextBtn = document.getElementById('next-btn');
+      nextBtn.disabled = (endIndex >= groups.length);
+    }
+
+    function previousPage() {
+      if (currentPage > 0) {
+        currentPage--;
+        displayGroups(currentPage);
+      }
+    }
+
+    function nextPage() {
+      var totalPages = Math.ceil(groups.length / pageSize);
+      if (currentPage < totalPages - 1) {
+        currentPage++;
+        displayGroups(currentPage);
+      }
+    }
+
+    function postToGroups(event) {
+      event.preventDefault();
+
+      var selectedGroups = [];
+      var checkboxes = document.querySelectorAll('#group-list input[type="checkbox"]:checked');
+      checkboxes.forEach(function(checkbox) {
+        selectedGroups.push(checkbox.value);
+      });
+
+      var postMessage = document.getElementById('post-message').value;
+      var postPhoto = document.getElementById('post-photo').files[0];
+      var postLink = document.getElementById('post-link').value;
+
+      var formData = new FormData();
+      formData.append('message', postMessage);
+      if (postPhoto) {
+        formData.append('source', postPhoto);
+      }
+      if (postLink) {
+        formData.append('link', postLink);
+      }
+
+      selectedGroups.forEach(function(groupId) {
+        FB.api('/' + groupId + '/feed', 'POST', formData, function(response) {
+          console.log(response); // Log the response data
+
+          if (response && !response.error) {
+            console.log('Post successful!');
+          } else {
+            console.log('Error posting to group ' + groupId + ': ' + response.error.message);
+          }
+        });
+      });
+
+      document.getElementById('post-form').reset();
+    }
+  </script>
+</body>
+</html>
